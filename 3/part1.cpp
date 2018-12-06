@@ -4,8 +4,8 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <thread>
 #include <vector>
+#include <unordered_set>
 
 class Claim {
 	uint32_t id;
@@ -45,65 +45,62 @@ public:
 	}
 
 	bool Overlaps(const Claim& other) const {
-		return !(left < other.right && right > other.left && top > other.bottom && bottom < other.top);
-	}
-
-	uint32_t OverlapQuantity(const Claim& other) const {
-		if (id == other.id)
-			return 0;
-		auto dx = std::min(right, other.right) - std::max(left, other.left);
-		auto dy = std::min(bottom, other.bottom) - std::max(top, other.top);
-		return dx * dy;
-	}
-
-	bool operator<(const Claim& other) const {
-		return left < other.left && top < other.top;
+		return id != other.id && !(left > other.right || right < other.left || top > other.bottom || bottom < other.top);
 	}
 };
 
-using Grid = std::array<std::bitset<1000>, 1000>;
+class OverlapCoord {
+	int x;
+	int y;
+public:
+	OverlapCoord(int x, int y) : x{x}, y{y} {}
 
-void SetGrid(Grid& grid, const Claim& claim) {
-	for (auto i = claim.Top(); i < claim.Bottom(); ++i)
-		for (auto j = claim.Left(); j < claim.Right(); ++j)
-			grid[i].set(j);
-}
+	bool operator==(const OverlapCoord& other) const noexcept {
+		return x == other.x && y == other.y;
+	}
 
-void ComputeOverlap(Grid& grid, const Grid& other, const Claim& box) {
-	for (auto i = box.Top(); i < box.Bottom(); ++i)
-		grid[i] &= other[i];
-}
+	struct OverlapHash {
+		size_t operator()(const OverlapCoord& o) const noexcept {
+			return (o.x << 16) | o.y;
+		}
+	};
+};
 
-void AssignOverlap(Grid& grid, const Grid& other, const Claim& box) {
-	for (auto i = box.Top(); i < box.Bottom(); ++i)
-		grid[i] |= other[i];
-}
+class OverlapCounter {
+	std::unordered_set<OverlapCoord, OverlapCoord::OverlapHash> overlaps{1500};
+
+	void UpdateOverlap(const Claim& a, const Claim& b) {
+		for (auto y = a.Top(); y < a.Bottom(); ++y)
+			for (auto x = a.Left(); x < a.Right(); ++x) {
+				if (x >= b.Left() && x < b.Right() && y >= b.Top() && y < b.Bottom()) {
+					overlaps.emplace(x, y);
+				}
+			}
+	}
+public:
+	OverlapCounter(std::istream& in) {
+		std::vector<Claim> claims;
+		claims.reserve(1500);
+		while (in.get() == '#') {
+			claims.emplace_back(in);
+			in.seekg(1, std::ios_base::cur);
+		}
+		for (auto&& claimA : claims) {
+			for (auto&& claimB : claims) {
+				if (claimA.Overlaps(claimB))
+					UpdateOverlap(claimA, claimB);
+			}
+		}
+	}
+
+	size_t OverlapCount() const {
+		return overlaps.size();
+	}
+};
 
 int main(int argc, char* argv[]) {
 	std::ifstream file{argc == 2 ? argv[1] : "input.txt"};
-	std::vector<Claim> claims;
-	while (file.get() == '#') {
-		claims.emplace_back(file);
-		file.seekg(1, std::ios_base::cur);
-	}
-	Grid grid;
-	for (auto iter = claims.rbegin(); iter != claims.rend(); ++iter) {
-		auto a = std::move(*iter);
-		claims.pop_back();
-		Grid gridA;
-		SetGrid(gridA, a);
-		for (const auto& b : claims) {
-			if (!a.Overlaps(b))
-				continue;
-			Grid gridB;
-			SetGrid(gridB, b);
-			ComputeOverlap(gridB, gridA, b);
-			AssignOverlap(grid, gridB, b);
-		}
-	}
-	auto total = 0;
-	for (auto& row : grid)
-		total += row.count();
-	std::cout << total << std::endl;
+	OverlapCounter overlapCounter{file};
+	std::cout << overlapCounter.OverlapCount() << std::endl;
 }
 

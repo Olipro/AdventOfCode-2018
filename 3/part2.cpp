@@ -1,12 +1,11 @@
-#include <algorithm>
 #include <array>
 #include <bitset>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <thread>
 #include <vector>
+#include <unordered_set>
 
 class Claim {
 	uint32_t id;
@@ -46,44 +45,44 @@ public:
 	}
 
 	bool Overlaps(const Claim& other) const {
-		return id != other.id && (left < other.right && right > other.left && top < other.bottom && bottom > other.top);
+		return id != other.id && !(left > other.right || right < other.left || top > other.bottom || bottom < other.top);
 	}
 };
 
-using Grid = std::array<std::bitset<1000>, 1000>;
+class OverlapCounter {
+	uint32_t nonOverlappingID = 0;
 
-void SetGrid(Grid& grid, const Claim& claim) {
-	for (auto i = claim.Top(); i < claim.Bottom(); ++i)
-		for (auto j = claim.Left(); j < claim.Right(); ++j)
-			grid[i].set(j);
-}
+public:
+	OverlapCounter(std::istream& in) {
+		std::vector<Claim> claims;
+		claims.reserve(1500);
+		while (in.get() == '#') {
+			claims.emplace_back(in);
+			in.seekg(1, std::ios_base::cur);
+		}
+		for (auto&& claimA : claims) {
+			bool overlaps = false;
+			for (auto&& claimB : claims) {
+				if (claimA.Overlaps(claimB)) {
+					overlaps = true;
+					break;
+				}
+			}
+			if (!overlaps) {
+				nonOverlappingID = claimA.ID();
+				return;
+			}
+		}
+	}
 
-void ComputeOverlap(Grid& grid, const Grid& other, const Claim& box) {
-	for (auto i = box.Top(); i < box.Bottom(); ++i)
-		grid[i] &= other[i];
-}
-
-void AssignOverlap(Grid& grid, const Grid& other, const Claim& box) {
-	for (auto i = box.Top(); i < box.Bottom(); ++i)
-		grid[i] |= other[i];
-}
+	uint32_t NonOverlappingID() const {
+		return nonOverlappingID;
+	}
+};
 
 int main(int argc, char* argv[]) {
 	std::ifstream file{argc == 2 ? argv[1] : "input.txt"};
-	std::vector<Claim> claims;
-	while (file.get() == '#') {
-		claims.emplace_back(file);
-		file.seekg(1, std::ios_base::cur);
-	}
-	auto i = std::remove_if(claims.begin(), claims.end(), [&claims] (const auto& claim) {
-		for (const auto& other : claims) {
-			if (claim.Overlaps(other))
-				return true;
-
-		}
-		return false;
-	});
-	claims.erase(i, claims.end());
-	std::cout << claims.front().ID() << std::endl;
+	OverlapCounter overlapCounter{file};
+	std::cout << overlapCounter.NonOverlappingID() << std::endl;
 }
 

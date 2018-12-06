@@ -6,9 +6,14 @@ All solutions are standard C++ and should compile on any conformant toolchain, h
 
 In the interests of simplicity, all solutions are in a single translation unit and specific to the part of that particular day although typically differences are tiny as most of the code is essentially a copy of part1 since the tasks so far are more of an evolution from their initial part than an entirely separate task.
 
-Performance hasn't been a particular objective - with the exception of day 3 (as I didn't flatten the grid or derive a more efficient solution) all implementations perform reasonably quickly.
+Performance hasn't been a particular objective but the solutions perform in a fairly fast manner.
 
-# Usage
+## Compiling
+No build system has been used, but since these are a single translation unit each, something along these lines should do the job:
+`g++ -o part1 -std=c++17 -O3 part1.cpp`
+`clang++ -o part1 -std=c++17 -O3 part1.cpp`
+
+## Usage
 
 By default, each solution expects its input data in input.txt you can override this by passing a file path when executing the application from the command line.
 

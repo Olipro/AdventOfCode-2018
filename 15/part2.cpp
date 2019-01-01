@@ -98,8 +98,33 @@ public:
     virtual ~Unit() = default;
 };
 
+class CacheablePath {
+    Tile origin;
+    Tile dest;
+    std::vector<Tile> path;
+public:
+    CacheablePath(Tile origin, Tile dest, std::vector<Tile> path) : origin{std::move(origin)}, dest{std::move(dest)}, path{std::move(path)} {}
+    CacheablePath(Tile origin, Tile dest) : CacheablePath{std::move(origin), std::move(dest), {}} {}
+
+    bool operator==(const CacheablePath& other) const noexcept {
+        return origin == other.origin && dest == other.dest;
+    }
+
+    const std::vector<Tile>& Path() const noexcept {
+        return path;
+    }
+
+    struct Hash {
+        size_t operator()(const CacheablePath& path) const noexcept {
+            Tile::Hash hash;
+            return (hash(path.origin) << 32) | hash(path.dest);
+        }
+    };
+};
+
 class Graph {
     std::unordered_set<Node, Node::Hash> graph;
+    mutable std::unordered_set<CacheablePath, CacheablePath::Hash> cache;
 
     static void AddNeighbours(const decltype(graph)& graph, const Node& node) {
         auto x = node.X();
@@ -124,6 +149,8 @@ public:
     }
 
     std::vector<Tile> GetShortestPath(const Tile& origin, const Tile& dest) const {
+        if (cache.count(CacheablePath{origin, dest}))
+            return cache.find(CacheablePath{origin, dest})->Path();
         auto graf = this->graph;
         auto& start = *graf.emplace(origin).first;
         auto& end = *graf.emplace(dest).first;
@@ -143,6 +170,7 @@ public:
                     std::vector<Tile> ret;
                     for (auto chk = std::cref(cur); start != chk; chk = chk.get().GetParent().value())
                         ret.emplace_back(chk);
+                    cache.emplace(origin, dest, ret);
                     return ret;
                 }
                 if (!queued.count(child)) {
@@ -150,11 +178,9 @@ public:
                     queued.emplace(child);
                     child.get().SetParent(cur);
                 }
-                /*auto curParent = child.get().GetParent();
-                if (!curParent)
-                    child.get().SetParent(cur);*/
             }
         }
+        cache.emplace(origin, dest);
         return {};
     }
 };
